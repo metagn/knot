@@ -8,7 +8,7 @@ macro tie*(T: type, name: untyped, value: typed) =
   var name = name
   if name.kind in {nnkOpenSymChoice, nnkClosedSymChoice}:
     name = name[0]
-  expectKind name, {nnkIdent, nnkSym}
+  expectKind name, {nnkIdent, nnkSym, nnkStrLit..nnkTripleStrLit}
   result = newCall(bindSym"tieImpl",
     newCall(bindSym"getTypeId", T),
     newLit(name.strVal),
@@ -56,7 +56,7 @@ macro tieVarSection(T: type, sec: typed) =
       if name.kind == nnkPragmaExpr: name = name[0]
       if name.kind == nnkPostfix: name = name[1]
       expectKind name, nnkSym
-      result.add(newCall(bindSym"tie", name, name))
+      result.add(newCall(bindSym"tie", T, name, name))
 
 macro tie*(T: type, value: untyped) =
   ## Tie `value` to `T`.
@@ -86,12 +86,33 @@ macro tie*(T: type, value: untyped) =
         bindSym"TypeDef")
   of nnkVarSection, nnkLetSection, nnkConstSection:
     result = newCall(bindSym"tieVarSection", T, value)
-  of nnkIdent, nnkSym, nnkOpenSymChoice, nnkClosedSymChoice:
+  of nnkIdent, nnkSym, nnkOpenSymChoice, nnkClosedSymChoice, nnkStrLit..nnkTripleStrLit:
     result = newCall(bindSym"tie", T, value, value)
   else:
     error "unknown node kind for tie " & $value.kind, value
 
-macro choiceImpl(T: type, t: static TypeId, name: static string) =
+macro pickImpl(T: type, t: static TypeId, name: static string): untyped =
+  # T is only for error info
+  var done = false
+  for n in associations(t, name):
+    if done:
+      error "more than one node to pick tied to " & repr(T) & " under " & name, T
+    else:
+      result = n
+      done = true
+
+macro pick*(T: type, name: untyped): untyped =
+  ## Picks a single node tied to `T` under `name`.
+  var name = name
+  if name.kind in {nnkOpenSymChoice, nnkClosedSymChoice}:
+    name = name[0]
+  expectKind name, {nnkIdent, nnkSym, nnkStrLit..nnkTripleStrLit}
+  result = newCall(bindSym"pickImpl",
+    T,
+    newCall(bindSym"getTypeId", T),
+    newLit(name.strVal))
+
+macro choiceImpl(T: type, t: static TypeId, name: static string): untyped =
   # T is only for error info
   result = newNimNode(nnkClosedSymChoice, T)
   for n in associations(t, name):
@@ -106,7 +127,7 @@ macro choice*(T: type, name: untyped): untyped =
   var name = name
   if name.kind in {nnkOpenSymChoice, nnkClosedSymChoice}:
     name = name[0]
-  expectKind name, {nnkIdent, nnkSym}
+  expectKind name, {nnkIdent, nnkSym, nnkStrLit..nnkTripleStrLit}
   result = newCall(bindSym"choiceImpl",
     T,
     newCall(bindSym"getTypeId", T),
@@ -134,7 +155,7 @@ macro unravel*(T: type, name, node: untyped): untyped =
   var name = name
   if name.kind in {nnkOpenSymChoice, nnkClosedSymChoice}:
     name = name[0]
-  expectKind name, {nnkIdent, nnkSym}
+  expectKind name, {nnkIdent, nnkSym, nnkStrLit..nnkTripleStrLit}
   result = newCall(bindSym"unravelImpl",
     newCall(bindSym"getTypeId", T),
     newLit(name.strVal),

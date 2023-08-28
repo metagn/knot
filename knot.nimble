@@ -2,7 +2,7 @@
 
 version       = "0.1.0"
 author        = "metagn"
-description   = "tie named nodes to types"
+description   = "tie compile-time values to types under names"
 license       = "MIT"
 srcDir        = "src"
 
@@ -22,6 +22,6 @@ task docs, "build docs for all modules":
 
 task tests, "run tests for multiple backends":
   when declared(runTests):
-    runTests(backends = {c, js, nims})
+    runTests(backends = {c, nims})
   else:
     echo "tests task not implemented, need nimbleutils"
