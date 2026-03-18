@@ -11,7 +11,7 @@ block:
     const bar = "abc"
     proc baz(x: int): string = "int " & $x
     proc baz(x: float): string = "float " & $x
-  when true: # Foo is not locally declared due to https://github.com/nim-lang/Nim/issues/22571
+  when (NimMajor, NimMinor) < (2, 0): # Foo is not locally declared due to https://github.com/nim-lang/Nim/issues/22571
     type Foo = Namespace.pick(Foo)
   doAssert Foo(a: true, x: "abc").x == bar
   doAssert baz(123) == "int 123"
