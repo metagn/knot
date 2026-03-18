@@ -133,15 +133,40 @@ macro choice*(T: type, name: untyped): untyped =
     newCall(bindSym"getTypeId", T),
     newLit(name.strVal))
 
+macro tieCountImpl(t: static TypeId, name: static string): untyped =
+  result = newLit(associationCount(t, name))
+
+macro tieCount*(T: type, name: untyped): untyped =
+  ## Gives the number of nodes tied to `T` under `name`.
+  var name = name
+  if name.kind in {nnkOpenSymChoice, nnkClosedSymChoice}:
+    name = name[0]
+  expectKind name, {nnkIdent, nnkSym, nnkStrLit..nnkTripleStrLit}
+  result = newCall(bindSym"tieCountImpl",
+    newCall(bindSym"getTypeId", T),
+    newLit(name.strVal))
+
 macro unravelImpl(t: static TypeId, name: static string, node: untyped): untyped =
-  result =
-    if node.kind in nnkCallKinds + {nnkBracket, nnkPar, nnkTupleConstr, nnkCurly}:
-      copy(node)
-    else:
-      newCall(node)
-  result.copyLineInfo(node)
-  for n in associations(t, name):
-    result.add(n)
+  if node.kind in {nnkLambda, nnkDo}:
+    let (kind, symkind, kindname) =
+      if node.kind == nnkLambda: (nnkProcDef, nskProc, "Proc")
+      else: (nnkTemplateDef, nskTemplate, "Templ")
+    var routine = newNimNode(kind, node)
+    for child in node: routine.add child
+    let routineName = genSym(symkind, "unravel" & kindname)
+    routine[0] = routineName
+    result = newStmtList(routine)
+    for n in associations(t, name):
+      result.add newCall(routineName, n)
+  else:
+    result =
+      if node.kind in nnkCallKinds + {nnkBracket, nnkPar, nnkTupleConstr, nnkCurly}:
+        copy(node)
+      else:
+        newCall(node)
+    result.copyLineInfo(node)
+    for n in associations(t, name):
+      result.add(n)
 
 macro unravel*(T: type, name, node: untyped): untyped =
   ## Gathers the nodes tied to `T` under `name` into a node pattern
@@ -151,6 +176,9 @@ macro unravel*(T: type, name, node: untyped): untyped =
   ## 
   ## If `node` is a call, each node is appended to the call as an argument.
   ## 
+  ## If `node` is an anonymous routine, it is called with each node as the only argument.
+  ## If the anonymous routine is a `do`, a template is generated instead of a proc.
+  ## 
   ## Otherwise, `node` is directly called with each node as an argument.
   var name = name
   if name.kind in {nnkOpenSymChoice, nnkClosedSymChoice}:
@@ -159,4 +187,53 @@ macro unravel*(T: type, name, node: untyped): untyped =
   result = newCall(bindSym"unravelImpl",
     newCall(bindSym"getTypeId", T),
     newLit(name.strVal),
+    node)
+
+macro unravelCaseImpl(t: static TypeId, name: static string, value, node: untyped): untyped =
+  var prelude: NimNode = nil
+  result = newNimNode(nnkCaseStmt, value)
+  result.add value
+  if node.kind in {nnkLambda, nnkDo}:
+    let (kind, symkind, kindname) =
+      if node.kind == nnkLambda: (nnkProcDef, nskProc, "Proc")
+      else: (nnkTemplateDef, nskTemplate, "Templ")
+    var routine = newNimNode(kind, node)
+    for child in node: routine.add child
+    let routineName = genSym(symkind, "unravelCase" & kindname)
+    routine[0] = routineName
+    prelude = routine
+    for n in associations(t, name):
+      result.add newTree(nnkOfBranch, n, newCall(routineName, n))
+  else:
+    for n in associations(t, name):
+      var call =
+        if node.kind in nnkCallKinds + {nnkBracket, nnkPar, nnkTupleConstr, nnkCurly}:
+          copy(node)
+        else:
+          newCall(node)
+      call.copyLineInfo(node)
+      call.add n
+      result.add newTree(nnkOfBranch, n, call)
+  result.add newTree(nnkElse, newStmtList())
+  if prelude != nil:
+    result = newStmtList(prelude, result)
+
+macro unravelCase*(T: type, name, value, node: untyped): untyped =
+  ## Creates a `case` statement for `value` and an `of` branch for each node
+  ## tied to `T` under `name` into a node pattern specified by `node`.
+  ## 
+  ## If `node` is a call, the node is added to it as an argument and called in each branch.
+  ## 
+  ## If `node` is an anonymous routine, it is called with each node as the only argument.
+  ## If the anonymous routine is a `do`, a template is generated instead of a proc.
+  ## 
+  ## Otherwise, `node` is directly called with each node as an argument.
+  var name = name
+  if name.kind in {nnkOpenSymChoice, nnkClosedSymChoice}:
+    name = name[0]
+  expectKind name, {nnkIdent, nnkSym, nnkStrLit..nnkTripleStrLit}
+  result = newCall(bindSym"unravelCaseImpl",
+    newCall(bindSym"getTypeId", T),
+    newLit(name.strVal),
+    value,
     node)

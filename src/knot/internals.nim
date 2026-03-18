@@ -26,3 +26,6 @@ proc associate*(t: TypeId, name: string, node: NimNode) =
 iterator associations*(t: TypeId, name: string): NimNode =
   for n in associationCache(t, name):
     yield n
+
+proc associationCount*(t: TypeId, name: string): int =
+  associationCache(t, name).len

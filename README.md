@@ -25,3 +25,5 @@ Foo.tie collection, 3
 assert Foo.unravel(collection, []) == [1, 2, 3]
 assert Foo.unravel(collection, {}) == {1, 2, 3}
 ```
+
+See tests for example uses.
