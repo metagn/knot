@@ -2,6 +2,8 @@
 
 Associate compile-time values with a type under a name.
 
+Not developed anymore in favor of the more general library [ketin](https://github.com/holo-nim/ketin).
+
 ```nim
 import knot
 
